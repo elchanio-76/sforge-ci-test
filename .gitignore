@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.sforge/cache/
+.sforge/state/
+.sforge/iac/**/.terraform/
