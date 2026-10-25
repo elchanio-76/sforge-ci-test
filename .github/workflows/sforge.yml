@@ -12,6 +12,7 @@ jobs:
   check:
     name: Build and check
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     permissions:
       contents: read
       security-events: write # upload the findings to code scanning
@@ -48,6 +49,7 @@ jobs:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     needs: check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write # sign in to the cloud with GitHub's OIDC token
@@ -76,14 +78,15 @@ jobs:
       - id: deploy
         name: Deploy the preview
         run: |
-          npx sforge deploy aws --preview pr-${{ github.event.number }} --no-headless --json > deploy.json
-          echo "url=$(jq -r .data.url deploy.json)" >> "$GITHUB_OUTPUT"
+          npx sforge deploy aws --preview pr-${{ github.event.number }} --no-headless --json > "$RUNNER_TEMP/deploy.json"
+          echo "url=$(jq -r .data.url "$RUNNER_TEMP/deploy.json")" >> "$GITHUB_OUTPUT"
 
   preview-azure:
     name: Preview on azure
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     needs: check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write # sign in to the cloud with GitHub's OIDC token
@@ -115,14 +118,15 @@ jobs:
         env:
           AZURE_SUBSCRIPTION_ID: ${{ vars.SFORGE_AZURE_SUBSCRIPTION_ID }}
         run: |
-          npx sforge deploy azure --preview pr-${{ github.event.number }} --no-headless --json > deploy.json
-          echo "url=$(jq -r .data.url deploy.json)" >> "$GITHUB_OUTPUT"
+          npx sforge deploy azure --preview pr-${{ github.event.number }} --no-headless --json > "$RUNNER_TEMP/deploy.json"
+          echo "url=$(jq -r .data.url "$RUNNER_TEMP/deploy.json")" >> "$GITHUB_OUTPUT"
 
   comment:
     name: Comment the preview URLs
     if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     needs: [preview-aws, preview-azure]
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       pull-requests: write
     steps:
@@ -153,6 +157,7 @@ jobs:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write # sign in to the cloud with GitHub's OIDC token
@@ -179,14 +184,15 @@ jobs:
       - id: deploy
         name: Deploy
         run: |
-          npx sforge deploy aws --no-headless --json > deploy.json
-          echo "url=$(jq -r .data.url deploy.json)" >> "$GITHUB_OUTPUT"
+          npx sforge deploy aws --no-headless --json > "$RUNNER_TEMP/deploy.json"
+          echo "url=$(jq -r .data.url "$RUNNER_TEMP/deploy.json")" >> "$GITHUB_OUTPUT"
 
   deploy-azure:
     name: Deploy azure
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: check
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment:
       name: production
       url: ${{ steps.deploy.outputs.url }}
@@ -219,5 +225,5 @@ jobs:
         env:
           AZURE_SUBSCRIPTION_ID: ${{ vars.SFORGE_AZURE_SUBSCRIPTION_ID }}
         run: |
-          npx sforge deploy azure --no-headless --json > deploy.json
-          echo "url=$(jq -r .data.url deploy.json)" >> "$GITHUB_OUTPUT"
+          npx sforge deploy azure --no-headless --json > "$RUNNER_TEMP/deploy.json"
+          echo "url=$(jq -r .data.url "$RUNNER_TEMP/deploy.json")" >> "$GITHUB_OUTPUT"

@@ -21,6 +21,7 @@ jobs:
     name: Roll back aws
     if: inputs.target == 'aws'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: read
       id-token: write # sign in to the cloud with GitHub's OIDC token
@@ -53,6 +54,7 @@ jobs:
     name: Roll back azure
     if: inputs.target == 'azure'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     environment: production
     permissions:
       contents: read
