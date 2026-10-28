@@ -17,6 +17,7 @@ export default defineConfig({
       domain: 'aws.sforge.elchanio-76.eu',
       previewDomain: 'preview.aws.sforge.elchanio-76.eu',
       dns,
+      auth: {},
       ci: { repo, branches: ['main'], pullRequests: true },
     },
     azure: {
@@ -26,6 +27,7 @@ export default defineConfig({
       state: { location: 'northeurope' },
       domain: 'azure.sforge.elchanio-76.eu',
       dns,
+      auth: { providers: ['github'] },
       // Deploys to production only through the reviewed environment.
       ci: { repo, branches: [], environments: ['production'], pullRequests: true },
     },

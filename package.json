@@ -19,6 +19,6 @@
   },
   "homepage": "https://github.com/elchanio-76/sforge-ci-test#readme",
   "devDependencies": {
-    "staticforge": "^0.2.0-rc.2"
+    "staticforge": "^0.3.0-rc.1"
   }
 }
