@@ -8,7 +8,7 @@ on:
         description: Target to roll back
         required: true
         type: choice
-        options: [aws, azure]
+        options: [firebase]
       to:
         description: Version to serve (see `sforge versions`); empty for the one before the active version
         required: false
@@ -17,42 +17,9 @@ on:
 permissions: {}
 
 jobs:
-  rollback-aws:
-    name: Roll back aws
-    if: inputs.target == 'aws'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      id-token: write # sign in to the cloud with GitHub's OIDC token
-    concurrency:
-      group: sforge-aws
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/staticforge
-          key: staticforge-${{ runner.os }}-${{ hashFiles('.sforge/iac/**/.terraform.lock.hcl') }}
-          restore-keys: staticforge-${{ runner.os }}-
-      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          role-to-assume: ${{ vars.SFORGE_AWS_ROLE_ARN }}
-          aws-region: eu-north-1
-      - name: Roll back
-        env:
-          TO: ${{ inputs.to }}
-        run: npx sforge rollback aws --yes ${TO:+--to "$TO"}
-
-  rollback-azure:
-    name: Roll back azure
-    if: inputs.target == 'azure'
+  rollback-firebase:
+    name: Roll back firebase
+    if: inputs.target == 'firebase'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -60,12 +27,10 @@ jobs:
       contents: read
       id-token: write # sign in to the cloud with GitHub's OIDC token
     concurrency:
-      group: sforge-azure
+      group: sforge-firebase
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0 # rollbacks on Azure rebuild an older commit
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 24
@@ -77,13 +42,11 @@ jobs:
           path: ~/.cache/staticforge
           key: staticforge-${{ runner.os }}-${{ hashFiles('.sforge/iac/**/.terraform.lock.hcl') }}
           restore-keys: staticforge-${{ runner.os }}-
-      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
-          client-id: ${{ vars.SFORGE_AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.SFORGE_AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.SFORGE_AZURE_SUBSCRIPTION_ID }}
+          workload_identity_provider: ${{ vars.SFORGE_FIREBASE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.SFORGE_FIREBASE_SERVICE_ACCOUNT }}
       - name: Roll back
         env:
           TO: ${{ inputs.to }}
-          AZURE_SUBSCRIPTION_ID: ${{ vars.SFORGE_AZURE_SUBSCRIPTION_ID }}
-        run: npx sforge rollback azure --yes ${TO:+--to "$TO"}
+        run: npx sforge rollback firebase --yes ${TO:+--to "$TO"}

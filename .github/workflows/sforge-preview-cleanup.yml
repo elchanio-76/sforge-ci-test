@@ -8,8 +8,8 @@ on:
 permissions: {}
 
 jobs:
-  remove-aws:
-    name: Remove the preview on aws
+  remove-firebase:
+    name: Remove the preview on firebase
     if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -29,40 +29,9 @@ jobs:
           path: ~/.cache/staticforge
           key: staticforge-${{ runner.os }}-${{ hashFiles('.sforge/iac/**/.terraform.lock.hcl') }}
           restore-keys: staticforge-${{ runner.os }}-
-      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
-          role-to-assume: ${{ vars.SFORGE_AWS_ROLE_ARN }}
-          aws-region: eu-north-1
+          workload_identity_provider: ${{ vars.SFORGE_FIREBASE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.SFORGE_FIREBASE_SERVICE_ACCOUNT }}
       - name: Remove the preview
-        run: npx sforge preview-destroy aws pr-${{ github.event.number }}
-
-  remove-azure:
-    name: Remove the preview on azure
-    if: github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    permissions:
-      contents: read
-      id-token: write # sign in to the cloud with GitHub's OIDC token
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/staticforge
-          key: staticforge-${{ runner.os }}-${{ hashFiles('.sforge/iac/**/.terraform.lock.hcl') }}
-          restore-keys: staticforge-${{ runner.os }}-
-      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
-        with:
-          client-id: ${{ vars.SFORGE_AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.SFORGE_AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.SFORGE_AZURE_SUBSCRIPTION_ID }}
-      - name: Remove the preview
-        env:
-          AZURE_SUBSCRIPTION_ID: ${{ vars.SFORGE_AZURE_SUBSCRIPTION_ID }}
-        run: npx sforge preview-destroy azure pr-${{ github.event.number }}
+        run: npx sforge preview-destroy firebase pr-${{ github.event.number }}

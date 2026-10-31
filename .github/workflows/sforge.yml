@@ -44,8 +44,8 @@ jobs:
           sarif_file: sforge.sarif
           category: sforge
 
-  preview-aws:
-    name: Preview on aws
+  preview-firebase:
+    name: Preview on firebase
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
     needs: check
     runs-on: ubuntu-latest
@@ -54,7 +54,7 @@ jobs:
       contents: read
       id-token: write # sign in to the cloud with GitHub's OIDC token
     concurrency:
-      group: sforge-aws-pr-${{ github.event.number }}
+      group: sforge-firebase-pr-${{ github.event.number }}
       cancel-in-progress: true
     outputs:
       url: ${{ steps.deploy.outputs.url }}
@@ -71,60 +71,20 @@ jobs:
           path: ~/.cache/staticforge
           key: staticforge-${{ runner.os }}-${{ hashFiles('.sforge/iac/**/.terraform.lock.hcl') }}
           restore-keys: staticforge-${{ runner.os }}-
-      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
-          role-to-assume: ${{ vars.SFORGE_AWS_ROLE_ARN }}
-          aws-region: eu-north-1
+          workload_identity_provider: ${{ vars.SFORGE_FIREBASE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.SFORGE_FIREBASE_SERVICE_ACCOUNT }}
       - id: deploy
         name: Deploy the preview
         run: |
-          npx sforge deploy aws --preview pr-${{ github.event.number }} --no-headless --json > "$RUNNER_TEMP/deploy.json"
-          echo "url=$(jq -r .data.url "$RUNNER_TEMP/deploy.json")" >> "$GITHUB_OUTPUT"
-
-  preview-azure:
-    name: Preview on azure
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    needs: check
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      id-token: write # sign in to the cloud with GitHub's OIDC token
-    concurrency:
-      group: sforge-azure-pr-${{ github.event.number }}
-      cancel-in-progress: true
-    outputs:
-      url: ${{ steps.deploy.outputs.url }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/staticforge
-          key: staticforge-${{ runner.os }}-${{ hashFiles('.sforge/iac/**/.terraform.lock.hcl') }}
-          restore-keys: staticforge-${{ runner.os }}-
-      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
-        with:
-          client-id: ${{ vars.SFORGE_AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.SFORGE_AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.SFORGE_AZURE_SUBSCRIPTION_ID }}
-      - id: deploy
-        name: Deploy the preview
-        env:
-          AZURE_SUBSCRIPTION_ID: ${{ vars.SFORGE_AZURE_SUBSCRIPTION_ID }}
-        run: |
-          npx sforge deploy azure --preview pr-${{ github.event.number }} --no-headless --json > "$RUNNER_TEMP/deploy.json"
+          npx sforge deploy firebase --preview pr-${{ github.event.number }} --no-headless --json > "$RUNNER_TEMP/deploy.json"
           echo "url=$(jq -r .data.url "$RUNNER_TEMP/deploy.json")" >> "$GITHUB_OUTPUT"
 
   comment:
     name: Comment the preview URLs
     if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
-    needs: [preview-aws, preview-azure]
+    needs: [preview-firebase]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -135,15 +95,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR: ${{ github.event.number }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          URL_AWS: ${{ needs.preview-aws.outputs.url }}
-          RESULT_AWS: ${{ needs.preview-aws.result }}
-          URL_AZURE: ${{ needs.preview-azure.outputs.url }}
-          RESULT_AZURE: ${{ needs.preview-azure.result }}
+          URL_FIREBASE: ${{ needs.preview-firebase.outputs.url }}
+          RESULT_FIREBASE: ${{ needs.preview-firebase.result }}
         run: |
           marker='<!-- sforge-preview -->'
           body="$marker"$'\n'"**Previews** of ${HEAD_SHA::7}:"$'\n'
-          body+=$'\n'"- aws: ${URL_AWS:-${RESULT_AWS}}"
-          body+=$'\n'"- azure: ${URL_AZURE:-${RESULT_AZURE}}"
+          body+=$'\n'"- firebase: ${URL_FIREBASE:-${RESULT_FIREBASE}}"
           id=$(gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate \
             --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -n 1)
           if [ -n "$id" ]; then
@@ -152,43 +109,8 @@ jobs:
             gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" -f body="$body" > /dev/null
           fi
 
-  deploy-aws:
-    name: Deploy aws
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: check
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      id-token: write # sign in to the cloud with GitHub's OIDC token
-    concurrency:
-      group: sforge-aws
-      cancel-in-progress: false # concurrent deploys refuse to overwrite each other's history
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        with:
-          node-version: 24
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/staticforge
-          key: staticforge-${{ runner.os }}-${{ hashFiles('.sforge/iac/**/.terraform.lock.hcl') }}
-          restore-keys: staticforge-${{ runner.os }}-
-      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          role-to-assume: ${{ vars.SFORGE_AWS_ROLE_ARN }}
-          aws-region: eu-north-1
-      - id: deploy
-        name: Deploy
-        run: |
-          npx sforge deploy aws --no-headless --json > "$RUNNER_TEMP/deploy.json"
-          echo "url=$(jq -r .data.url "$RUNNER_TEMP/deploy.json")" >> "$GITHUB_OUTPUT"
-
-  deploy-azure:
-    name: Deploy azure
+  deploy-firebase:
+    name: Deploy firebase
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: check
     runs-on: ubuntu-latest
@@ -200,7 +122,7 @@ jobs:
       contents: read
       id-token: write # sign in to the cloud with GitHub's OIDC token
     concurrency:
-      group: sforge-azure
+      group: sforge-firebase
       cancel-in-progress: false # concurrent deploys refuse to overwrite each other's history
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -215,15 +137,12 @@ jobs:
           path: ~/.cache/staticforge
           key: staticforge-${{ runner.os }}-${{ hashFiles('.sforge/iac/**/.terraform.lock.hcl') }}
           restore-keys: staticforge-${{ runner.os }}-
-      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906 # v3.1.0
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
-          client-id: ${{ vars.SFORGE_AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.SFORGE_AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.SFORGE_AZURE_SUBSCRIPTION_ID }}
+          workload_identity_provider: ${{ vars.SFORGE_FIREBASE_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.SFORGE_FIREBASE_SERVICE_ACCOUNT }}
       - id: deploy
         name: Deploy
-        env:
-          AZURE_SUBSCRIPTION_ID: ${{ vars.SFORGE_AZURE_SUBSCRIPTION_ID }}
         run: |
-          npx sforge deploy azure --no-headless --json > "$RUNNER_TEMP/deploy.json"
+          npx sforge deploy firebase --no-headless --json > "$RUNNER_TEMP/deploy.json"
           echo "url=$(jq -r .data.url "$RUNNER_TEMP/deploy.json")" >> "$GITHUB_OUTPUT"

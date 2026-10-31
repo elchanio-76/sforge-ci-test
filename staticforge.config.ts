@@ -10,6 +10,7 @@ export default defineConfig({
     language: 'en',
   },
   styles: ['/assets/css/site.css'],
+  iac: { name: 'sforge-ci-test' },
   targets: {
     aws: {
       provider: 'aws',
@@ -28,6 +29,13 @@ export default defineConfig({
       domain: 'azure.sforge.elchanio-76.eu',
       dns,
       auth: { providers: ['github'] },
+      // Deploys to production only through the reviewed environment.
+      ci: { repo, branches: [], environments: ['production'], pullRequests: true },
+    },
+    firebase: {
+      provider: 'firebase',
+      project: 'sforge-sandbox-76',
+      baseUrl: 'https://sforge-ci-test-firebase.web.app',
       // Deploys to production only through the reviewed environment.
       ci: { repo, branches: [], environments: ['production'], pullRequests: true },
     },
